@@ -8,19 +8,22 @@ import time
 import pandas as pd
 from datetime import date, timedelta
 import random
+import json
 
 # Import all functions defined
 from functions import *
 
 # ________________________1. Getting the latest webdriver version_____________________
-update_driver()
+# update_driver()
 
 # ________________________2. Webdriver Instance_____________________
 # Creating a webdriver instance
-options = Options()
+# options = Options()
 # options.add_argument('--headless')
-options.add_argument('--disable-gpu')  # Last I checked this was necessary.
-driver = webdriver.Chrome("../ChromeDriver_Path/chromedriver", chrome_options=options)
+# options.add_argument('--disable-gpu')  # Last I checked this was necessary.
+# driver = webdriver.Chrome("./ChromeDriver_Path/chromedriver")
+# driver = webdriver.Chrome("/home/brett/Downloads/chromedriver")
+driver = webdriver.Chrome()
 
 url = "https://www.indeed.com/worldwide"  # The Indeed URL is defined
 
@@ -35,7 +38,7 @@ country_link_dict = {ii.text: ii.get_attribute("href") for ii in countries}
 
 # ________________________4. Scraping the list of jobs_____________________
 # Defining the job and the country
-job_name = "Data Scientist"
+job_name = "DevOps Engineer"
 country_name = "United States"
 
 # Getting the corresponding URL for our country
@@ -46,10 +49,12 @@ job_name_url = url_string(job_name)
 country_name_url = url_string(country_name)
 
 # Defining the URL to find the job and the country
-url = url.split("/?hl")[0] + "/jobs?q={0}&l={1}".format(job_name_url,country_name_url)
+url = url.split("/?hl")[0] + "/jobs?q={0}&l={1}&fromage=1".format(job_name_url,country_name_url)
 
 # Opening the url we have just defined in our browser
-driver.get(url)  # Opening the url we have just defined in our browser
+driver.get(url)
+# driver.get("https://www.indeed.com/q-Devops-Engineer-jobs.html")  # Opening the url we have just defined in our browser
+time.sleep(10)
 
 # ________________________5. Getting the number of job results_____________________
 # We find how many jobs are offered.
@@ -84,30 +89,47 @@ while num_jobs_scraped < 1000:
     num_jobs_scraped = num_jobs_scraped + len(jobs)
 
     for ii in jobs:
+        job_json = {}
         # Finding the job title and its related elements
-        job_title = ii.find_element(By.CLASS_NAME, "jobTitle")
+        try:
+            job_title = ii.find_element(By.CLASS_NAME, "jobTitle")
+        except:
+            continue
+        job_json["job_title"] = job_title.text
         job_title_list.append(job_title.text)
+        job_json["job_link"] = job_title.find_element(By.CSS_SELECTOR, "a").get_attribute("href")
         job_link_list.append(job_title.find_element(By.CSS_SELECTOR, "a").get_attribute("href"))
+        job_json["job_id"] = job_title.find_element(By.CSS_SELECTOR, "a").get_attribute("id")
         job_id_list.append(job_title.find_element(By.CSS_SELECTOR, "a").get_attribute("id"))
 
         # Finding the company name and location
+        job_json["job_company"] = ii.find_element(By.CLASS_NAME, "companyName").text
         job_company_list.append(ii.find_element(By.CLASS_NAME, "companyName").text)
+        job_json["job_location"] = ii.find_element(By.CLASS_NAME, "companyLocation").text
         job_location_list.append(ii.find_element(By.CLASS_NAME, "companyLocation").text)
         # Finding the posting date
+        job_json["job_date"] = ii.find_element(By.CLASS_NAME, "date").text
         job_date_list.append(ii.find_element(By.CLASS_NAME, "date").text)
 
         # Trying to find the salary element. If it is not found, a None will be returned.
         try:
             job_salary_list.append(ii.find_element(By.CLASS_NAME, "salary-snippet-container").text)
-
         except:
             try:
                 job_salary_list.append(ii.find_element(By.CLASS_NAME, "estimated-salary").text)
             except:
                 job_salary_list.append(None)
 
+        try:
+            job_json["job_salary"] = ii.find_element(By.CLASS_NAME, "salary-snippet-container").text
+        except:
+            try:
+                job_json["job_salary"] = ii.find_element(By.CLASS_NAME, "estimated-salary").text
+            except:
+                job_json["job_salary"] = None
+
         # We wait a random amount of seconds to imitate a human behavior.
-        time.sleep(random.random())
+        time.sleep(1.5 + random.random())
 
         # Click the job element to get the description
         job_title.click()
@@ -118,14 +140,26 @@ while num_jobs_scraped < 1000:
         # Find the job description. If the element is not found, a None will be returned.
         try:
             job_description_list.append(driver.find_element(By.ID, "jobDescriptionText").text)
-
         except:
             job_description_list.append(None)
+
+        try:
+            job_json["job_description"] = driver.find_element(By.ID, "jobDescriptionText").text
+        except:
+            job_json["job_description"] = None
+        print(json.dumps(job_json, indent=4))
+        with open(job_json["job_id"] + '.json', 'w', encoding='utf-8') as f:
+            json.dump(job_json, f, ensure_ascii=False, indent=4)
+
+        
 
     time.sleep(1.5 + random.random())
 
     # We press the next button.
-    driver.find_element(By.XPATH, next_button_xpath).click()
+    try:
+        driver.find_element(By.XPATH, next_button_xpath).click()
+    except:
+        continue
 
     # The button element is updated to the 7th button instead of the 6th.
     next_button_xpath = '//*[@id="jobsearch-JapanPage"]/div/div/div[5]/div[1]/nav/div[7]/a'
